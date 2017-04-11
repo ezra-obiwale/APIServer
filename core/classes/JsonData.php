@@ -7,94 +7,74 @@
  */
 class JsonData implements Data {
 
-    public static function getNodeFromPath(&$path) {
-        if ($node = strstr($path, '/', true)) {
-            $path = substr($path, strlen($node) + 1);
-            return $node;
-        }
-        return;
-    }
+    protected static $node;
 
-    public static function getTargetClassName(&$path) {
-        $paths = explode('/', $path);
-        self::getNodeFromPath($path);
-        return _toCamel($paths[0]) . '\\' . _toCamel($paths[1]);
+    /**
+     * Sets the node to work on
+     * @param string $node
+     */
+    public static function setNode($node) {
+        static::$node = $node;
     }
 
     /**
      * 
-     * @param string $node
      * @param mixed $data
-     * @param string $path
+     * @param string $id
      * @return array|null
      */
-    public static function create($node, $data, $path = null) {
+    public static function create($data, $id = null) {
         // creating a new document|object entirely
-        if (!$path) {
+        if (!$id) {
             // ensure object has id
-            $data['id'] = @$data['id'] ?: self::createGUID();
+            $data['id'] = @$data['id'] ?: static::createGUID();
             // use id as the path
-            $path = $data['id'];
+            $id = $data['id'];
         }
         // save data to the path on the node
-        $updatedNodeData = self::setDataAtPath($data, $path, self::getNode($node));
+        $updatedNodeData = static::setDataAtPath($data, $id, static::getNode());
         // save updated node data to file
-        self::saveDataToNode($updatedNodeData, $node);
+        static::saveDataToNode($updatedNodeData);
         // return given data
         return $data;
     }
 
     /**
      * Fetches the data on the node at the given path
-     * @param string $node
-     * @param string $path
-     * @param integer $limit
-     * @param integer $start
+     * @param string $id
      * @return mixed
      */
-    public static function get($node, $path = null, $limit = null, $start = 0) {
+    public static function get($id = null) {
+        if ($resp = static::external($path))
+            return $resp;
         // get data at node
-        $data = self::getNode($node);
+        $data = static::getNode();
         // get data at id
-        return self::getDataAtPath($data, $path);
-    }
-
-    /**
-     * Searches the given node for the given query
-     * @param string $node
-     * @param string $query
-     * @param integer $limit
-     * @param integer $start
-     * @return mixed
-     */
-    public static function search($node, $query = null, $limit = null, $start = 0) {
-        
+        return static::getDataAtPath($data, $id);
     }
 
     /**
      * Updates the data on the node at the given path
-     * @param string $node
-     * @param string $path
+     * @param string $id
      * @param mixed $data
      * @return mixed
      */
-    public static function update($node, $path, $data) {
-        $newData = self::setDataAtPath($data, $path, self::getNode($node), false);
-        self::saveDataToNode($newData, $node);
+    public static function update($id, $data) {
+        $newData = static::setDataAtPath($data, $id, static::getNode(), false);
+        static::saveDataToNode($newData);
         return $data;
     }
 
     /**
      * Deletes data at path on node
-     * @param string $node
      * @param string $path
      * @return null
      */
-    public static function delete($node, $path = null) {
+    public static function delete($path = null) {
         // delete path on node
         if ($path) {
             // get data at path
-            $data = self::getDataAtPath(self::getNode($node), $path, true);
+            $data = static::getDataAtPath(static::getNode(), $path, true);
             // get last key from id
             $paths = explode('/', $path);
             $last_key = null;
@@ -104,13 +84,13 @@ class JsonData implements Data {
                 // remove data at last key from general data
                 unset($data[$last_key]);
                 // save general data
-                self::saveDataToNode($data, $node);
+                static::saveDataToNode($data);
             }
         }
-        // delete node itself
+        // delete node itstatic
         else {
             // get file path
-            $file_path = self::getFilePath($node);
+            $file_path = static::getFilePath();
             // delete file
             unlink($file_path);
         }
@@ -129,23 +109,21 @@ class JsonData implements Data {
 
     /**
      * Fetches the data at the given node
-     * @param string $node
      * @return array
      */
-    private static function getNode($node) {
-        if (FALSE === $file_path = self::getFilePath($node))
+    private static function getNode() {
+        if (FALSE === $file_path = static::getFilePath())
             return null;
         return json_decode(@file_get_contents($file_path), true) ?: [];
     }
 
     /**
      * Fetches the full path to the node file
-     * @param string $node
      * @param boolean $checkExists
      * @return string|boolean
      */
-    private static function getFilePath($node, $checkExists = false) {
-        $file_path = DATA . $node . '.json';
+    private static function getFilePath($checkExists = false) {
+        $file_path = DATA . static::$node . '.json';
         return $checkExists && !is_readable($file_path) ? false : $file_path;
     }
 
@@ -175,7 +153,7 @@ class JsonData implements Data {
      * @param array $data
      * @param string $path
      * @param boolean $returnParent Indicates whether to return the parent object of the path 
-     * instead of the path itself
+     * instead of the path itstatic
      * @return mixed
      */
     private static function getDataAtPath($data, $path, $returnParent = false) {
@@ -217,10 +195,76 @@ class JsonData implements Data {
     /**
      * Saves the given data to the given node
      * @param array $data
-     * @param string $node
      */
-    private static function saveDataToNode($data, $node) {
-        file_put_contents(self::getFilePath($node), json_encode($data));
+    private static function saveDataToNode($data) {
+        file_put_contents(static::getFilePath(), json_encode($data));
+    }
+
+    /**
+     * Fetches the namespace of the called class
+     * @return string
+     */
+    final protected static function getNamespace() {
+        $classNameParts = explode('\\', get_called_class());
+        array_pop($classNameParts);
+        return join('\\', $classNameParts);
+    }
+
+    /**
+     * Process extended GET requests
+     * Ex. countries/id loads a given country
+     * countries/id/states should load states/?countries=id
+     * @param string $id
+     * @return mixed
+     */
+    final protected static function external($id) {
+        if (is_array($id))
+            return;
+        $parts = explode('/', $id);
+        if ($parts < 2)
+            return;
+        // the last part of the path is the target class
+        $targetClass = _toCamel(array_pop($parts));
+        // target class should have the same namespace as current class
+        $fullClassName = static::getNamespace() . '\\' . $targetClass;
+        if (!class_exists($fullClassName))
+            return;
+        $key = null;
+        // params for target class
+        $params = [
+            static::nodeToFK(static::$node) => array_shift($parts)
+        ];
+        // add other path parts to params
+        while (count($parts)) {
+            $next = array_shift($parts);
+            if (!$key) {
+                $key = $next;
+            }
+            else {
+                $params[static::nodeToFK($key)] = $next;
+                $key = null;
+            }
+        }
+        $fullClassName::get($params);
+    }
+
+    /**
+     * Converts a node name to a string that can be used as a foreign key on 
+     * other nodes
+     * @param string $node
+     * @return string
+     */
+    protected static function nodeToFK($node) {
+        return static::parseNodeName($node) . '_id';
+    }
+
+    /**
+     * Parses the node name received from request to format to use in thee database
+     * @param string $node
+     * @return string
+     */
+    protected static function parseNodeName($node) {
+        return $node;
     }
 
 }

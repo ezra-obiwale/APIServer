@@ -1,2 +1,2 @@
-# APIServer
-An api server for quick launch
+# RESTServer
+A REST server for quick projects
