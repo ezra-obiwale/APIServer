@@ -2,8 +2,7 @@
 
 function checkMethod($PROCESSOR, $method) {
     if (!method_exists($PROCESSOR, $method)) {
-        http_response_code(404);
-        throw new Exception('Not Implemented');
+        throw new Exception('Not Implemented', 404);
     }
 }
 
@@ -14,72 +13,86 @@ header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, X-Requ
 // CORS THINGIES ENDED
 
 require_once 'bootstrap.php';
-$PROCESSOR = config('global', 'dataProcessor');
+
+// Default data processor
+$PROCESSOR = config('global', 'defaultProcessor');
+$NodeToClass = config('global', 'nodeToClass');
+// Allowed request methods
+$allowedMethods = config('global', 'allowedMethods');
+
+// get path from GET parameters and into array
+$path = filter_input(INPUT_GET, 'path');
 
 // default status is true: expecting a successful action
 $response = ['status' => true];
-// default status
-// get path from GET parameters and into array
-$path = filter_input(INPUT_GET, 'path');
-// get node class
-$NodeClass = _toCamel($PROCESSOR::getTargetClassName($path));
+
+// get the target version
+$version = getFirstPath($path);
 // process request on filename
-if (!$node = $PROCESSOR::getNodeFromPath($path)) {
+if (!$node = getFirstPath($path)) {
     $response = [
         'status' => false,
         'message' => 'Invalid path'
     ];
 }
 else {
-// fetch request data into $request_data
-    parse_str(file_get_contents('php://input'), $request_data);
 // check request method/type
     try {
+        $NodeClass = $NodeToClass($version, $node);
         // Block if node is marked blocked 
-        if (in_array($node, config('global', 'blockedNodes') ?: []))
-            throw new Exception('Access denied');
+        if (in_array($node, config('global', 'blockedNodes') ?: [])) {
+            throw new Exception('Access denied', 403);
+        }
         // Use node class if exists
-        if (class_exists($NodeClass))
+        else if (class_exists($NodeClass)) {
             $PROCESSOR = $NodeClass;
+        }
         // Node class doesn't exist. Throw exception if it must exist to continue
         else if (config('global', 'appNodesOnly')) {
-            http_response_code(403);
-            throw new Exception('Access denied');
+            throw new Exception('Access denied', 403);
+        }
+        if (!is_a(new $PROCESSOR, Data::class)) {
+            throw new Exception('Target class must implement class Data', 504);
         }
         // Check if method is allowed
-        $allowedMethods = config('global', 'allowedMethods');
         if ($allowedMethods && array_key_exists($node, $allowedMethods) &&
                 !in_array($_SERVER['REQUEST_METHOD'], $allowedMethods[$node])) {
-            http_response_code(403);
-            throw new \Exception('Method Not Allowed');
+            throw new \Exception('Method Not Allowed', 403);
         }
-        if ($path === 'search') {
-            $response['data'] = $PROCESSOR::search($node);
+        // no processor matched
+        else if (!$PROCESSOR) {
+            throw new Exception('Server not properly set', 504);
         }
+        // doing CRUD
         else {
+            $PROCESSOR::setNode($node);
             // process request
-            switch (filter_input(INPUT_SERVER, 'REQUEST_METHOD')) {
+            switch ($_SERVER['REQUEST_METHOD']) {
                 case 'GET':
                     checkMethod($PROCESSOR, 'get');
-                    $response['data'] = $PROCESSOR::get($node, $path);
+                    $response['data'] = $PROCESSOR::get($path);
                     break;
                 case 'POST':
                     checkMethod($PROCESSOR, 'create');
-                    $response['data'] = $PROCESSOR::create($node, $request_data, $path);
+                    $response['data'] = $PROCESSOR::create(filter_input_array(INPUT_POST), $path);
                     break;
                 case 'PUT':
                 case 'PATCH':
                     checkMethod($PROCESSOR, 'update');
-                    $response['data'] = $PROCESSOR::update($node, $path, $request_data);
+                    $data = file_get_contents('php://input');
+                    // fetch request data into $request_data
+                    parse_str($data, $request_data);
+                    $response['data'] = $PROCESSOR::update($path, $request_data);
                     break;
                 case 'DELETE':
                     checkMethod($PROCESSOR, 'delete');
-                    $response['data'] = $PROCESSOR::delete($node, $path);
+                    $response['data'] = $PROCESSOR::delete($path);
                     break;
             }
         }
     }
     catch (Exception $ex) {
+        http_response_code($ex->getCode());
         $response['status'] = false;
         $response['message'] = $ex->getMessage();
     }

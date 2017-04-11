@@ -1,21 +1,14 @@
 <?php
 
 return [
-    'dataProcessor' => JsonData::class,
+    'defaultProcessor' => JsonData::class,
+    'nodeToClass' => function($version, $node) {
+        return _toCamel($version) . '\\' . _toCamel($node);
+    },
     'mongo' => [
-        'db' => 'MONGO_DB_NAME'
+        'db' => 'DATABASE_NAME'
     ],
     'appNodesOnly' => true,
     'blockedNodes' => [],
-    'allowedMethods' => [
-    /*
-     * Set allowed http methods for each node
-     * If a node does not exist here, it is assumed that all methods are
-     * allowed
-     * 
-     * Methods include GET, POST, PATCH, PUT, DELETE
-     * 
-     * 'nodeName' => ['GET']
-     */
-    ]
+    'allowedMethods' => []
 ];
