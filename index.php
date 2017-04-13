@@ -21,7 +21,9 @@ $NodeToClass = config('global', 'nodeToClass');
 $allowedMethods = config('global', 'allowedMethods');
 
 // get path from GET parameters and into array
-$path = filter_input(INPUT_GET, 'path');
+$path = filter_input(INPUT_GET, 'rstsvr__path');
+// remove htaccess created variable
+unset($_GET['rstsvr__path']);
 
 // default status is true: expecting a successful action
 $response = ['status' => true];
@@ -65,7 +67,6 @@ else {
         }
         // doing CRUD
         else {
-            $PROCESSOR::setNode($node);
             // process request
             switch ($_SERVER['REQUEST_METHOD']) {
                 case 'GET':

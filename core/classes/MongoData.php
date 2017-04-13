@@ -54,7 +54,10 @@ class MongoData extends JsonData {
             return $response;
         }
         $col = static::selectNode();
+        // get many
         if (!$id || is_array($id)) {
+            // find by id or just retrieve all
+            $params = $id ?: [];
             // get search query
             if ($query = static::getSearchQuery()) {
                 // get search keys
@@ -63,11 +66,12 @@ class MongoData extends JsonData {
                     return [];
                 // regex to check if the keys contain the query
                 $query = new MongoRegex('/' . $query . '/i');
-                // create the cursor
-                $cursor = $col->find(['$or' => array_fill_keys($search, $query)]);
+                // update parameters with search keys
+                foreach ($search as $key) {
+                    $params['$or'][] = [$key => $query];
+                }
             }
-            else // find by id or just retrieve all
-                $cursor = $col->find($id ?: []);
+            $cursor = $col->find($params);
             // get limit
             if ($limit = static::getLimit()) {
                 // set limit
@@ -83,6 +87,7 @@ class MongoData extends JsonData {
             // return as array
             return iterator_to_array($cursor);
         }
+        // get one
         else {
             $id_parts = explode('/', $id);
             $id = array_shift($id_parts);
@@ -195,7 +200,7 @@ class MongoData extends JsonData {
      * @return MongoCollection
      */
     final protected static function selectNode() {
-        return static::db()->selectCollection(static::parseNodeName(static::$node));
+        return static::db()->selectCollection(static::parseNodeName(static::getNode()));
     }
 
     /**
