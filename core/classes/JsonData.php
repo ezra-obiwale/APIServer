@@ -7,8 +7,6 @@
  */
 class JsonData implements Data {
 
-    protected static $node;
-
     /**
      * Sets the node to work on
      * @param string $node
@@ -32,7 +30,7 @@ class JsonData implements Data {
             $id = $data['id'];
         }
         // save data to the path on the node
-        $updatedNodeData = static::setDataAtPath($data, $id, static::getNode());
+        $updatedNodeData = static::setDataAtPath($data, $id, static::getNodeData());
         // save updated node data to file
         static::saveDataToNode($updatedNodeData);
         // return given data
@@ -48,7 +46,7 @@ class JsonData implements Data {
         if ($resp = static::external($path))
             return $resp;
         // get data at node
-        $data = static::getNode();
+        $data = static::getNodeData();
         // get data at id
         return static::getDataAtPath($data, $id);
     }
@@ -60,7 +58,7 @@ class JsonData implements Data {
      * @return mixed
      */
     public static function update($id, $data) {
-        $newData = static::setDataAtPath($data, $id, static::getNode(), false);
+        $newData = static::setDataAtPath($data, $id, static::getNodeData(), false);
         static::saveDataToNode($newData);
         return $data;
     }
@@ -74,7 +72,7 @@ class JsonData implements Data {
         // delete path on node
         if ($path) {
             // get data at path
-            $data = static::getDataAtPath(static::getNode(), $path, true);
+            $data = static::getDataAtPath(static::getNodeData(), $path, true);
             // get last key from id
             $paths = explode('/', $path);
             $last_key = null;
@@ -111,7 +109,7 @@ class JsonData implements Data {
      * Fetches the data at the given node
      * @return array
      */
-    private static function getNode() {
+    private static function getNodeData() {
         if (FALSE === $file_path = static::getFilePath())
             return null;
         return json_decode(@file_get_contents($file_path), true) ?: [];
@@ -123,7 +121,7 @@ class JsonData implements Data {
      * @return string|boolean
      */
     private static function getFilePath($checkExists = false) {
-        $file_path = DATA . static::$node . '.json';
+        $file_path = DATA . static::getNode() . '.json';
         return $checkExists && !is_readable($file_path) ? false : $file_path;
     }
 
@@ -232,7 +230,7 @@ class JsonData implements Data {
         $key = null;
         // params for target class
         $params = [
-            static::nodeToFK(static::$node) => array_shift($parts)
+            static::nodeToFK(static::getNode()) => array_shift($parts)
         ];
         // add other path parts to params
         while (count($parts)) {
@@ -245,7 +243,7 @@ class JsonData implements Data {
                 $key = null;
             }
         }
-        $fullClassName::get($params);
+        return $fullClassName::get($params);
     }
 
     /**
@@ -265,6 +263,14 @@ class JsonData implements Data {
      */
     protected static function parseNodeName($node) {
         return $node;
+    }
+
+    /**
+     * Fetches the target node
+     * @return string
+     */
+    protected static function getNode() {
+        return camelTo_(substr(get_called_class(), strlen(static::getNamespace()) + 1));
     }
 
 }

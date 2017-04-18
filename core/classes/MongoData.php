@@ -33,10 +33,7 @@ class MongoData extends JsonData {
         $data['_id'] = new MongoId();
         $id = (string) $data['_id'];
         $col = static::selectNode();
-        if (is_string($error = static::preSave($data, $id, true))) {
-            static::$error = $error;
-            return false;
-        }
+        static::preSave($data, $id, true);
         if ($col->insert($data)) {
             static::postSave($data, $id, true);
             return $data;
@@ -54,7 +51,10 @@ class MongoData extends JsonData {
             return $response;
         }
         $col = static::selectNode();
+        // get many
         if (!$id || is_array($id)) {
+            // find by id or just retrieve all
+            $params = $id ?: [];
             // get search query
             if ($query = static::getSearchQuery()) {
                 // get search keys
@@ -63,11 +63,12 @@ class MongoData extends JsonData {
                     return [];
                 // regex to check if the keys contain the query
                 $query = new MongoRegex('/' . $query . '/i');
-                // create the cursor
-                $cursor = $col->find(['$or' => array_fill_keys($search, $query)]);
+                // update parameters with search keys
+                foreach ($search as $key) {
+                    $params['$or'][] = [$key => $query];
+                }
             }
-            else // find by id or just retrieve all
-                $cursor = $col->find($id ?: []);
+            $cursor = $col->find($params);
             // get limit
             if ($limit = static::getLimit()) {
                 // set limit
@@ -83,6 +84,7 @@ class MongoData extends JsonData {
             // return as array
             return iterator_to_array($cursor);
         }
+        // get one
         else {
             $id_parts = explode('/', $id);
             $id = array_shift($id_parts);
@@ -128,6 +130,7 @@ class MongoData extends JsonData {
      * @return boolean
      */
     public static function update($id, $data) {
+        unset($data['_id']);
         $col = static::selectNode();
         // allow update descendant keys
         if (!is_array($id) && stristr($id, '/', true)) {
@@ -136,10 +139,7 @@ class MongoData extends JsonData {
             $path = join('.', $paths);
             $data = [$path => $data];
         }
-        if (is_string($error = static::preSave($data, $id))) {
-            static::$error = $error;
-            return false;
-        }
+        static::preSave($data, $id);
         if ($data = $col->findAndModify(is_array($id) ? $id : ['_id' => new MongoId($id)]
                 , ['$set' => $data], null, ['new' => true])) {
             static::postSave($data, $id);
@@ -195,7 +195,7 @@ class MongoData extends JsonData {
      * @return MongoCollection
      */
     final protected static function selectNode() {
-        return static::db()->selectCollection(static::parseNodeName(static::$node));
+        return static::db()->selectCollection(static::parseNodeName(static::getNode()));
     }
 
     /**
@@ -236,7 +236,7 @@ class MongoData extends JsonData {
      * @param string $id
      * @param boolean $new
      */
-    protected static function postSave(&$data, $id, $new = false) {
+    protected static function postSave($data, $id, $new = false) {
         
     }
 
@@ -249,12 +249,7 @@ class MongoData extends JsonData {
      * @return string|null String of error message
      */
     protected static function validate(array $data, array $rules, array $messages = []) {
-        try {
-            return (new Validator($data, $rules, $messages))->run();
-        }
-        catch (Exception $ex) {
-            return $ex->getMessage();
-        }
+        return (new Validator($data, $rules, $messages))->run();
     }
 
     /**
