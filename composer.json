@@ -8,6 +8,6 @@
         }
     ],
     "require": {
-        "mongodb/mongodb": ""
+        "mongodb/mongodb": "^1.1"
     }
 }

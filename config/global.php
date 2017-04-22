@@ -6,7 +6,7 @@ return [
         return _toCamel($version) . '\\' . _toCamel($node);
     },
     'mongo' => [
-        'db' => 'DATABASE_NAME'
+//        'db' => 'DB_NAME'
     ],
     'appNodesOnly' => true,
     'blockedNodes' => [],

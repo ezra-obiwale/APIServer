@@ -8,6 +8,12 @@
 class JsonData implements Data {
 
     /**
+     * The name of the node being operated on
+     * @var string
+     */
+    protected static $node;
+
+    /**
      * Sets the node to work on
      * @param string $node
      */
@@ -270,7 +276,10 @@ class JsonData implements Data {
      * @return string
      */
     protected static function getNode() {
-        return camelTo_(substr(get_called_class(), strlen(static::getNamespace()) + 1));
+        if (!$namespace = static::getNamespace()) {
+            return static::$node;
+        }
+        return camelTo_(substr(get_called_class(), strlen($namespace) + 1));
     }
 
 }

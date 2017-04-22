@@ -28,3 +28,5 @@ spl_autoload_register(function($class_name) {
     if (is_readable($class_path))
         require_once $class_path;
 }, true);
+
+include_once 'vendor/autoload.php';

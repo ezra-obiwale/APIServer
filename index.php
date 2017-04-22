@@ -67,6 +67,8 @@ else {
         }
         // doing CRUD
         else {
+            $options = [];
+            $PROCESSOR::setNode($node);
             // process request
             switch ($_SERVER['REQUEST_METHOD']) {
                 case 'GET':
@@ -77,13 +79,14 @@ else {
                     checkMethod($PROCESSOR, 'create');
                     $response['data'] = $PROCESSOR::create(filter_input_array(INPUT_POST), $path);
                     break;
-                case 'PUT':
                 case 'PATCH':
+                    $options = ['replace' => false];
+                case 'PUT':
                     checkMethod($PROCESSOR, 'update');
                     $data = file_get_contents('php://input');
                     // fetch request data into $request_data
                     parse_str($data, $request_data);
-                    $response['data'] = $PROCESSOR::update($path, $request_data);
+                    $response['data'] = $PROCESSOR::update($path, $request_data, $options);
                     break;
                 case 'DELETE':
                     checkMethod($PROCESSOR, 'delete');
