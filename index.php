@@ -41,17 +41,22 @@ else {
 // check request method/type
     try {
         $NodeClass = $NodeToClass($version, $node);
-        // Block if node is marked blocked 
-        if (in_array($node, config('global', 'blockedNodes') ?: [])) {
-            throw new Exception('Access denied', 403);
-        }
+
         // Use node class if exists
-        else if (class_exists($NodeClass)) {
+        if (class_exists($NodeClass)) {
             $PROCESSOR = $NodeClass;
         }
         // Node class doesn't exist. Throw exception if it must exist to continue
-        else if (config('global', 'appNodesOnly')) {
+        else if (config('global', 'nodes', 'appOnly')) {
             throw new Exception('Access denied', 403);
+        }
+        // Using default processor. Check if node is allowed
+        else {
+            $allowedNodes = config('global', 'nodes', 'allowed') ?: [];
+            // Block if not allowed 
+            if (count($allowedNodes) && !in_array($node, $allowedNodes)) {
+                throw new Exception('Access denied', 403);
+            }
         }
         if (!is_a(new $PROCESSOR, Data::class)) {
             throw new Exception('Target class must implement class Data', 504);
@@ -80,8 +85,13 @@ else {
                     $response['data'] = $PROCESSOR::create(filter_input_array(INPUT_POST), $path);
                     break;
                 case 'PATCH':
-                    $options = ['replace' => false];
+                    $replace = config('global', 'replace', 'patch');
+                    $options = ['replace' => !is_null($replace) ? $replace : false];
                 case 'PUT':
+                    if (!count($options)) {
+                        $replace = config('global', 'replace', 'put');
+                        $options = ['replace' => !is_null($replace) ? $replace : true];
+                    }
                     checkMethod($PROCESSOR, 'update');
                     $data = file_get_contents('php://input');
                     // fetch request data into $request_data
@@ -96,7 +106,7 @@ else {
         }
     }
     catch (Exception $ex) {
-        http_response_code($ex->getCode());
+        http_response_code($ex->getCode() ?: 503);
         $response['status'] = false;
         $response['message'] = $ex->getMessage();
     }
