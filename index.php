@@ -2,7 +2,7 @@
 
 function checkMethod($PROCESSOR, $method) {
     if (!method_exists($PROCESSOR, $method)) {
-        throw new Exception('Not Implemented', 404);
+        throw new Exception('Not Implemented', 501);
     }
 }
 
@@ -15,10 +15,11 @@ header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, X-Requ
 require_once 'bootstrap.php';
 
 // Default data processor
-$PROCESSOR = config('global', 'defaultProcessor');
-$NodeToClass = config('global', 'nodeToClass');
+$DEFAULT_PROCESSOR = config('global.defaultProcessor');
+// NodeToClass function
+$NodeToClass = config('global.nodeToClass');
 // Allowed request methods
-$allowedMethods = config('global', 'allowedMethods');
+$allowedMethods = config('global.allowedMethods');
 
 // get path from GET parameters and into array
 $path = filter_input(INPUT_GET, 'rstsvr__path');
@@ -47,28 +48,28 @@ else {
             $PROCESSOR = $NodeClass;
         }
         // Node class doesn't exist. Throw exception if it must exist to continue
-        else if (config('global', 'nodes', 'appOnly')) {
+        else if (config('global.nodes.appOnly')) {
             throw new Exception('Access denied', 403);
         }
         // Using default processor. Check if node is allowed
         else {
-            $allowedNodes = config('global', 'nodes', 'allowed') ?: [];
+            $allowedNodes = config('global.nodes.allowed') ?: [];
             // Block if not allowed 
             if (count($allowedNodes) && !in_array($node, $allowedNodes)) {
                 throw new Exception('Access denied', 403);
             }
+            $PROCESSOR = $DEFAULT_PROCESSOR;
         }
         if (!is_a(new $PROCESSOR, Data::class)) {
-            throw new Exception('Target class must implement class Data', 504);
+            throw new Exception('Target class must implement class Data', 500);
         }
         // Check if method is allowed
-        if ($allowedMethods && array_key_exists($node, $allowedMethods) &&
-                !in_array($_SERVER['REQUEST_METHOD'], $allowedMethods[$node])) {
+        if ($allowedMethods && array_key_exists($node, $allowedMethods) && !in_array($_SERVER['REQUEST_METHOD'], $allowedMethods[$node])) {
             throw new \Exception('Method Not Allowed', 403);
         }
         // no processor matched
         else if (!$PROCESSOR) {
-            throw new Exception('Server not properly set', 504);
+            throw new Exception('Server not properly set', 500);
         }
         // doing CRUD
         else {
@@ -85,11 +86,11 @@ else {
                     $response['data'] = $PROCESSOR::create(filter_input_array(INPUT_POST), $path);
                     break;
                 case 'PATCH':
-                    $replace = config('global', 'replace', 'patch');
+                    $replace = config('global.replace.patch');
                     $options = ['replace' => !is_null($replace) ? $replace : false];
                 case 'PUT':
                     if (!count($options)) {
-                        $replace = config('global', 'replace', 'put');
+                        $replace = config('global.replace.put');
                         $options = ['replace' => !is_null($replace) ? $replace : true];
                     }
                     checkMethod($PROCESSOR, 'update');
@@ -106,7 +107,7 @@ else {
         }
     }
     catch (Exception $ex) {
-        http_response_code($ex->getCode() ?: 503);
+        if ($ex->getCode()) http_response_code($ex->getCode());
         $response['status'] = false;
         $response['message'] = $ex->getMessage();
     }

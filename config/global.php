@@ -20,7 +20,11 @@ return [
         /*
          * The database name
          */
-        'db' => 'rest_server'
+        'db' => 'rest_server',
+        /**
+         * The key to hold resolved references in the result documents
+         */
+        'dataRefKey' => 'refs'
     ],
     /*
      * Indicates whether existing documents/rows should be replaced (i.e. overwritten)

@@ -49,8 +49,7 @@ class JsonData implements Data {
      * @return mixed
      */
     public static function get($id = null) {
-        if ($resp = static::external($path))
-            return $resp;
+        if ($resp = static::external($path)) return $resp;
         // get data at node
         $data = static::getNodeData();
         // get data at id
@@ -116,8 +115,7 @@ class JsonData implements Data {
      * @return array
      */
     private static function getNodeData() {
-        if (FALSE === $file_path = static::getFilePath())
-            return null;
+        if (FALSE === $file_path = static::getFilePath()) return null;
         return json_decode(@file_get_contents($file_path), true) ?: [];
     }
 
@@ -139,13 +137,12 @@ class JsonData implements Data {
      * @param boolean $overwrite Indicates whether to overwrite or merge with existing data, if any
      * @return array
      */
-    private static function setDataAtPath($newData, $path, $oldData, $overwrite = true) {
+    private static function setDataAtPath($newData, $path, $oldData, $overwrite =
+    true) {
         $location = & $oldData;
         foreach (explode('/', $path) as $p) {
-            if (!$p)
-                continue;
-            if (!@$location[$p])
-                $location[$p] = NULL;
+            if (!$p) continue;
+            if (!@$location[$p]) $location[$p] = NULL;
             $location = & $location[$p];
         }
         $location = $overwrite ? $newData : array_merge($location, $newData);
@@ -166,11 +163,9 @@ class JsonData implements Data {
         while (!$last_key && count($paths))
             $last_key = array_pop($paths);
         foreach ($paths as $p) {
-            if (!$p)
-                continue;
+            if (!$p) continue;
             $data = @$data[$p];
-            if (!$data)
-                break;
+            if (!$data) break;
         }
         return !$returnParent && $last_key ? @$data[$last_key] : $data;
     }
@@ -222,22 +217,29 @@ class JsonData implements Data {
      * @return mixed
      */
     final protected static function external($id) {
-        if (is_array($id))
-            return;
+        if (is_array($id)) return;
         $parts = explode('/', $id);
-        if ($parts < 2)
-            return;
+        if ($parts < 2) return;
+        $rawClass = array_pop($parts);
         // the last part of the path is the target class
-        $targetClass = _toCamel(array_pop($parts));
+        $targetClass = _toCamel(str_replace('-', '_', $rawClass));
         // target class should have the same namespace as current class
         $fullClassName = static::getNamespace() . '\\' . $targetClass;
-        if (!class_exists($fullClassName))
-            return;
+        if (!class_exists($fullClassName)) return;
         $key = null;
-        // params for target class
-        $params = [
-            static::nodeToFK(static::getNode()) => array_shift($parts)
-        ];
+        $fks = static::nodeToFK(static::getNode(), $rawClass);
+        $val = array_shift($parts);
+        if (is_array($fks)) {
+            $or = [];
+            foreach ($fks as $fk) {
+                $or[] = [$fk => $val];
+            }
+            // params for target class
+            $params = ['$or' => $or];
+        }
+        else {
+            $params = [$fks => $val];
+        }
         // add other path parts to params
         while (count($parts)) {
             $next = array_shift($parts);
@@ -256,10 +258,23 @@ class JsonData implements Data {
      * Converts a node name to a string that can be used as a foreign key on 
      * other nodes
      * @param string $node
+     * @param string $target The target node which holds the FK
+     * @return string|array If array, array of strings representing the possible
+     * foreign keys
+     */
+    protected static function nodeToFK($node, $target) {
+        return static::parseNodeName($node) . '_id';
+    }
+
+    /**
+     * Converts a foreign key string to its corresponding node name
+     * @param string $fk
      * @return string
      */
-    protected static function nodeToFK($node) {
-        return static::parseNodeName($node) . '_id';
+    protected static function FKToNode($fk) {
+        $parts = explode('_', $fk);
+        if (count($parts) > 1) array_pop($parts);
+        return join('_', $parts);
     }
 
     /**

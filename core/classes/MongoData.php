@@ -14,6 +14,12 @@ use MongoDB\Client,
 class MongoData extends JsonData {
 
     /**
+     * Array of indexed nodes
+     * @var array
+     */
+    private static $indexed = [];
+
+    /**
      * The error that occured during the operation
      * @var string
      */
@@ -26,6 +32,12 @@ class MongoData extends JsonData {
     private static $db;
 
     /**
+     * Array of key names to resolved reference array
+     * @var array
+     */
+    private static $resolvedRefs = [];
+
+    /**
      * Creates the data on the given node
      * @param array $data
      * @param string $id If not given, it is generated.
@@ -33,8 +45,7 @@ class MongoData extends JsonData {
      */
     public static function create($data, $id = null) {
         // update existing document with descendant document at path
-        if ($id && stristr($id, '/', true))
-            return static::update($id, $data);
+        if ($id && stristr($id, '/', true)) return static::update($id, $data);
         // no id
         $col = static::selectNode();
         static::preSave($data);
@@ -42,7 +53,7 @@ class MongoData extends JsonData {
         if ($result->getInsertedCount()) {
             static::postSave($data, (string) $result->getInsertedId());
             $data['_id'] = $result->getInsertedId();
-            return $data;
+            return self::resolveRefs($data);
         }
         return false;
     }
@@ -65,9 +76,8 @@ class MongoData extends JsonData {
             // get search query
             if ($query = static::getSearchQuery()) {
                 // get search keys
-                $search = static::searchableKeys();
-                if (!count($search))
-                    return [];
+                $search = array_keys(static::searchableKeys());
+                if (!count($search)) return [];
                 // regex to check if the keys contain the query
                 $query = new \MongoDB\BSON\Regex($query, 'i');
                 // update parameters with search keys
@@ -85,14 +95,13 @@ class MongoData extends JsonData {
                     $options['skip'] = ($page - 1) * $limit;
             }
             // get sort parameter
-            if ($sort = static::sortBy())
-                $options['sort'] = $sort;
+            if ($sort = static::sortBy()) $options['sort'] = $sort;
             // get projection keys
             $projection = static::setSearchResponseKeys();
             if (count($projection))
-                $options['project'] = array_fill_keys($projection, 1);
+                    $options['project'] = array_fill_keys($projection, 1);
             // return as array
-            return $col->find($params, $options)->toArray();
+            return self::resolveRefs($col->find($params, $options)->toArray(), true);
         }
         // get one
         else {
@@ -102,11 +111,92 @@ class MongoData extends JsonData {
                 '_id' => new ObjectId($id)
             ]);
             foreach ($id_parts as $part) {
-                if (!$result = $result[$part])
-                    break;
+                if (!$result = $result[$part]) break;
             }
-            return $result;
+            return self::resolveRefs((array) $result);
         }
+    }
+
+    /**
+     * Resolves all the references in the result
+     * @param array $result
+     * @param boolean $many Indicates that the $result contains several documents
+     * @return array
+     */
+    final protected static function resolveRefs($result, $many = false) {
+        if (is_array($result) && is_array($pull = static::pullRefs())) {
+            foreach ($pull as $key) {
+                $nodeName = static::FKToNode($key);
+                if (!$many) {
+                    self::resolveRef($key, $result, $nodeName);
+                }
+                else {
+                    foreach ($result as &$res) {
+                        if (is_object($res)) {
+                            $res = method_exists($res, 'toArray') ?
+                                    $res->toArray() : $res->getArrayCopy();
+                        }
+                        self::resolveRef($key, $res, $nodeName);
+                    }
+                }
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Resolves a key reference on the given node name
+     * @param string $key
+     * @param array $result
+     * @param string $nodeName
+     */
+    final protected static function resolveRef($key, array &$result, $nodeName) {
+        // reference doesn't exist in result; nothing to do here.
+        if (!array_key_exists($key, $result)
+                // only continue if value exists
+                || empty($result[$key])) return;
+
+        $refValue = $result[$key];
+        // only get reference if not already gotten
+        if (!array_key_exists($key, self::$resolvedRefs)
+                || !array_key_exists($refValue, self::$resolvedRefs[$key])) {
+            global $NodeToClass, $DEFAULT_PROCESSOR;
+            // get app node class
+            $NodeClass = $NodeToClass(self::getNamespace(), $nodeName);
+            // use default processor if app node class doesn't exist
+            if (!class_exists($NodeClass)) $NodeClass = $DEFAULT_PROCESSOR;
+            // store current class refs
+            $refs = self::$resolvedRefs;
+            // empty refs
+            self::$resolvedRefs = [];
+            // set the node name
+            $NodeClass::setNode($nodeName);
+            // resolve ref
+            $resolved = $NodeClass::selectNode()->find([
+                '_id' => [
+                    '$in' => array_map(function($id) {
+                                return self::createGUID($id);
+                            }, (array) $refValue),
+                ]
+            ]);
+            // restore current class refs
+            self::$resolvedRefs = $refs;
+            // add resolved ref
+            if (is_string($refValue))
+                    self::$resolvedRefs[$key][$refValue] = $resolved->toArray();
+            else {
+                if (!array_key_exists($key, self::$resolvedRefs))
+                        self::$resolvedRefs[$key] = $resolved->toArray();
+                else
+                        self::$resolvedRefs = array_merge(self::$resolvedRefs, $resolved->toArray());
+            }
+        }
+        // add the reference to the result
+        $result[config('global.mongo.dataRefKey')][$key] = is_string($refValue) ?
+                // requires only one document
+                self::$resolvedRefs[$key][$refValue][0] :
+                // requires multiple documents
+                self::$resolvedRefs[$key];
     }
 
     /**
@@ -134,6 +224,15 @@ class MongoData extends JsonData {
     }
 
     /**
+     * Determines how documents should be sorted when fetching multiple
+     * @return array Array of field keys and 1 (asc) or -1 (desc) as values. Multiple fields 
+     * sorting is allowed
+     */
+    protected static function sortBy() {
+        return filter_input(INPUT_GET, 'sort');
+    }
+
+    /**
      * Updates a document/key
      * @param string|array $id If array, this is the criteria for the documents to update
      * @param mixed $data
@@ -141,7 +240,10 @@ class MongoData extends JsonData {
      * @return boolean
      */
     public static function update($id, $data, array $options = []) {
+        // remove existing primary key
         unset($data['_id']);
+        // remove existing references
+        unset($data[config('global.mongo.dataRefKey')]);
         $col = static::selectNode();
         if (is_string($id)) {
             // allow update descendant keys
@@ -173,7 +275,7 @@ class MongoData extends JsonData {
             'upsert' => $upsert
                 ])) {
             static::postSave($data, $id, true);
-            return $data;
+            return self::resolveRefs((array) $data);
         }
         return false;
     }
@@ -190,25 +292,21 @@ class MongoData extends JsonData {
             $paths = explode('/', $id);
             $id = array_shift($paths);
             $last_key = array_pop($paths);
-            if (!$data = static::get($id))
-                return null;
+            if (!$data = static::get($id)) return null;
 
             $_data = $data;
             foreach ($paths as $key => $path) {
-                if (!$key)
-                    $_data = &$data[$path];
-                else
-                    $_data = &$_data[$path];
-                if (is_object($_data))
-                    $_data = $_data->getArrayCopy();
+                if (!$key) $_data = &$data[$path];
+                else $_data = &$_data[$path];
+                if (is_object($_data)) $_data = $_data->getArrayCopy();
             }
             $value = $_data[$last_key];
             unset($_data[$last_key]);
-            if (static::update($id, $data))
-                return $value;
+            if (static::update($id, $data)) return $value;
         }
-        else if ($resp = $col->findOneAndDelete(is_array($id) ? $id : ['_id' => new ObjectId($id)]))
-            return $resp;
+        $method = is_array($id) ? 'deleteMany' : 'findOneAndDelete';
+        if ($resp = $col->{$method}(is_array($id) ? $id : ['_id' => new ObjectId($id)]))
+                return is_array($id) ?: $resp;
         return false;
     }
 
@@ -228,7 +326,32 @@ class MongoData extends JsonData {
      * @return Collection
      */
     final protected static function selectNode() {
-        return static::db()->selectCollection(static::parseNodeName(static::getNode()));
+        $nodeName = static::parseNodeName(static::getNode());
+        $collection = static::db()->selectCollection($nodeName);
+        // create indexes if not already created
+        if (!in_array($nodeName, self::$indexed)) {
+            $unique = static::uniqueKeys();
+            $compound = array_diff_key(static::searchableKeys(), $unique);
+            $indexes = [];
+            foreach ($unique as $key => $dir) {
+                $indexes[] = ['key' => [$key => $dir], 'unique' => true];
+            }
+            foreach ($compound as $key => $dir) {
+                $indexes[] = ['key' => [$key => $dir]];                
+            }
+            
+            if (count($indexes)) $collection->createIndexes($indexes);
+            self::$indexed[] = $nodeName;
+        }
+        return $collection;
+    }
+
+    /**
+     * The unique keys on the node
+     * @return array [key => 1 | -1, ...]
+     */
+    protected static function uniqueKeys() {
+        return [];
     }
 
     /**
@@ -239,14 +362,14 @@ class MongoData extends JsonData {
     final protected static function db($dbName = null) {
         $mongo = new Client();
         if (!self::$db)
-            self::$db = $mongo->selectDatabase($dbName ?:
-                    config('global', 'mongo', 'db'));
+                self::$db = $mongo->selectDatabase($dbName ?:
+                    config('global.mongo.db'));
         return self::$db;
     }
 
     /**
      * Fetches a list of keys that search can be operated on
-     * return array
+     * return array [key => 1 | -1, ...]
      */
     protected static function searchableKeys() {
         return [];
@@ -280,17 +403,9 @@ class MongoData extends JsonData {
      * @param array $messages Array of field_name keys to field error message values
      * @return string|null String of error message
      */
-    protected static function validate(array $data, array $rules, array $messages = []) {
+    protected static function validate(array $data, array $rules, array $messages =
+    []) {
         return (new Validator($data, $rules, $messages))->run();
-    }
-
-    /**
-     * Determines how documents should be sorted when fetching multiple
-     * @return array Array of field keys and 1 (asc) or -1 (desc) as values. Multiple fields 
-     * sorting is allowed
-     */
-    protected static function sortBy() {
-        
     }
 
     /**
@@ -299,6 +414,23 @@ class MongoData extends JsonData {
      */
     protected static function setSearchResponseKeys() {
         return [];
+    }
+
+    /**
+     * Creates a global unique id
+     * @param string $base
+     * @return ObjectId
+     */
+    public static function createGUID($base = null) {
+        return new ObjectId($base);
+    }
+
+    /**
+     * Indicates the references to pull when fetching documents
+     * @return array An array of document keys to pull e.g. user_id
+     */
+    protected static function pullRefs() {
+        return false;
     }
 
 }
