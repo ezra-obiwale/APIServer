@@ -258,7 +258,7 @@ class MongoData extends JsonData {
                 $options['replace'] = true;
             }
         }
-        static::preSave($data, $id);
+        static::preSave($data, $id, $options);
 
         $upsert = @$options['upsert'] ?: false;
         $method = 'findOneAndReplace';
@@ -378,10 +378,13 @@ class MongoData extends JsonData {
     /**
      * Called before create and update are called
      * @param mixed $data
-     * @param string $id
+     * @param string $id Only provided on update and has the id of the document
+     * to update
+     * @param array $options Only provided on update and is the options passed 
+     * into update method
      * @return string|null If string is returned, it is taken as an error message
      */
-    protected static function preSave(&$data, $id) {
+    protected static function preSave(&$data, $id, array $options = []) {
         
     }
 

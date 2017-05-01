@@ -1,19 +1,18 @@
 <?php
 
 /**
- * Fetches a value from the config file
- * @param string $name
- * @param mixed $_
+ * Fetches a value from a config file
+ * @param string $path The name of the file and the path to the desired value,
+ * all separated by dots (.)
  * @return mixed
  */
-function config($name, $_) {
-    $args = func_get_args();
-    $data = include ROOT . 'config' . DIRECTORY_SEPARATOR . $name . '.php';
-    array_shift($args);
-    if (count($args)) {
-        foreach ($args as $arg) {
-            if (!array_key_exists($arg, $data))
-                break;
+function config($path) {
+    $path = explode('.', $path);
+    $filename = array_shift($path);
+    $data = include ROOT . 'config' . DIRECTORY_SEPARATOR . $filename . '.php';
+    if (count($path)) {
+        foreach ($path as $arg) {
+            if (!array_key_exists($arg, $data)) break;
             $data = $data[$arg];
         }
     }
@@ -26,8 +25,7 @@ function config($name, $_) {
  * @return string
  */
 function _toCamel($str) {
-    if (!is_string($str))
-        return '';
+    if (!is_string($str)) return '';
     $func = create_function('$c', 'return strtoupper($c[1]);');
     return ucfirst(preg_replace_callback('/_([a-z])/', $func, $str));
 }
@@ -38,8 +36,7 @@ function _toCamel($str) {
  * @return string
  */
 function camelTo_($str) {
-    if (!is_string($str) || empty($str))
-        return '';
+    if (!is_string($str) || empty($str)) return '';
     $str[0] = strtolower($str[0]);
     $func = create_function('$c', 'return "_" . strtolower($c[1]);');
     return preg_replace_callback('/([A-Z])/', $func, $str);
@@ -87,10 +84,17 @@ function getFirstPath(&$path) {
  */
 function makeValuesArray(array &$array) {
     foreach ($array as &$value) {
-        if (!is_array($value))
-            $value = array($value);
+        if (!is_array($value)) $value = array($value);
     }
     return $array;
+}
+
+/**
+ * Fetches the HTTP Request method
+ * @return string
+ */
+function requestMethod() {
+    return $_SERVER['REQUEST_METHOD'];
 }
 
 const UPLOAD_ERROR_NO_FILE = 'No file found';
@@ -112,7 +116,7 @@ function uploadFiles(array $data, array $options = array()) {
     $return = array('success' => array(), 'errors' => array());
     foreach ($data as $ppt => $info) {
         if (is_array($options['ignore']) && in_array($ppt, $options['ignore']))
-            continue;
+                continue;
         makeValuesArray($info);
 
         foreach ($info['name'] as $key => $name) {
@@ -134,7 +138,7 @@ function uploadFiles(array $data, array $options = array()) {
             }
             $dir = !empty($options['path']) ? $options['path'] : DATA . 'uploads';
             if (substr($dir, strlen($dir) - 1) !== DIRECTORY_SEPARATOR)
-                $dir .= DIRECTORY_SEPARATOR;
+                    $dir .= DIRECTORY_SEPARATOR;
             if (!is_dir($dir)) {
                 if (!mkdir($dir, 0777, true)) {
                     $return['errors'][$ppt][$name] = UPLOAD_ERROR_PATH;
@@ -144,10 +148,9 @@ function uploadFiles(array $data, array $options = array()) {
             $filename = basename($pInfo['filename']) . '.' . $pInfo['extension'];
             if ($options['filename']) {
                 $filename = $options['filename'];
-                if ($key)
-                    $filename .= '_' . $key;
+                if ($key) $filename .= '_' . $key;
                 if (!strstr($options['filename'], '.'))
-                    $filename .= '.' . $pInfo['extension'];
+                        $filename .= '.' . $pInfo['extension'];
             }
             $savePath = $dir . $filename;
             if (move_uploaded_file($tmpName, $savePath)) {

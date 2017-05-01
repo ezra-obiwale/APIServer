@@ -14,6 +14,8 @@ header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, X-Requ
 
 require_once 'bootstrap.php';
 
+if ($INIT = config('global.init')) call_user_func($INIT);
+
 // Default data processor
 $DEFAULT_PROCESSOR = config('global.defaultProcessor');
 // NodeToClass function
@@ -39,10 +41,9 @@ if (!$node = getFirstPath($path)) {
     ];
 }
 else {
-// check request method/type
+    // check request method/type
     try {
         $NodeClass = $NodeToClass($version, $node);
-
         // Use node class if exists
         if (class_exists($NodeClass)) {
             $PROCESSOR = $NodeClass;
@@ -76,7 +77,7 @@ else {
             $options = [];
             $PROCESSOR::setNode($node);
             // process request
-            switch ($_SERVER['REQUEST_METHOD']) {
+            switch (requestMethod()) {
                 case 'GET':
                     checkMethod($PROCESSOR, 'get');
                     $response['data'] = $PROCESSOR::get($path);

@@ -10,7 +10,7 @@ interface Data {
      * Sets the target node
      */
     public static function setNode($node);
-
+    
     /**
      * Creates the given data at the given node and id, if given
      * @param mixed $data
