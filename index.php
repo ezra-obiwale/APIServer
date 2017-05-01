@@ -22,6 +22,8 @@ $DEFAULT_PROCESSOR = config('global.defaultProcessor');
 $NodeToClass = config('global.nodeToClass');
 // Allowed request methods
 $allowedMethods = config('global.allowedMethods');
+$requestMethod = requestMethod();
+$classMethod = config("global.requestMethods.{$requestMethod}");
 
 // get path from GET parameters and into array
 $path = filter_input(INPUT_GET, 'rstsvr__path');
@@ -74,16 +76,15 @@ else {
         }
         // doing CRUD
         else {
+            checkMethod($PROCESSOR, $classMethod);
             $options = [];
             $PROCESSOR::setNode($node);
             // process request
             switch (requestMethod()) {
                 case 'GET':
-                    checkMethod($PROCESSOR, 'get');
                     $response['data'] = $PROCESSOR::get($path);
                     break;
                 case 'POST':
-                    checkMethod($PROCESSOR, 'create');
                     $response['data'] = $PROCESSOR::create(filter_input_array(INPUT_POST), $path);
                     break;
                 case 'PATCH':
@@ -94,14 +95,12 @@ else {
                         $replace = config('global.replace.put');
                         $options = ['replace' => !is_null($replace) ? $replace : true];
                     }
-                    checkMethod($PROCESSOR, 'update');
                     $data = file_get_contents('php://input');
                     // fetch request data into $request_data
                     parse_str($data, $request_data);
                     $response['data'] = $PROCESSOR::update($path, $request_data, $options);
                     break;
                 case 'DELETE':
-                    checkMethod($PROCESSOR, 'delete');
                     $response['data'] = $PROCESSOR::delete($path);
                     break;
             }

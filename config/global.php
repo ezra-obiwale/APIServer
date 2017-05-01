@@ -67,4 +67,14 @@ return [
         /* Overwrite existing documents/rows with received data */
         'put' => true,
     ],
+    /**
+     * Class methods to call on different request methods
+     */
+    'requestMethods' => [
+        'GET' => 'get',
+        'PATCH' => 'update',
+        'POST' => 'create',
+        'PUT' => 'update',
+        'DELETE' => 'delete'
+    ]
 ];
