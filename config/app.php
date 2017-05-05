@@ -155,11 +155,6 @@ return [
     /* @IMPORTANT: The amount of time before a session token expires */
     'session_timeout' => 30,
     'urls' => [
-        /*
-         * The url where the rest server is hosted 
-         * @IMPORTANT: Change
-         */
-        'server' => 'https://ezra-obiwale.github.com/RESTServer/',
         /* Client urls */
         'client' => [
             /*
@@ -167,6 +162,21 @@ return [
              * @IMPORTANT: Change
              */
             'home' => 'http://clientserver.com',
+            /*
+             * Failed email verification 
+             * @IMPORTANT: Change
+             */
+            'email_verification_failure' => 'http://clientserver.com/email-not-verified',
+            /*
+             * Retried email verification 
+             * @IMPORTANT: Change
+             */
+            'email_verification_retried' => 'http://clientserver.com/email-already-verified',
+            /*
+             * Successful email verification 
+             * @IMPORTANT: Change
+             */
+            'email_verification_success' => 'http://clientserver.com/email-verified',
             /*
              * Link to the page where users can reset their passwords
              * It would be appended with GET variable token
@@ -176,16 +186,11 @@ return [
              * @IMPORTANT: Change
              */
             'password_reset' => 'http://clientserver.com/reset-password',
-            /*
-             * Successful email verification 
-             * @IMPORTANT: Change
-             */
-            'email_verification_success' => 'http://clientserver.com/email-verified',
-            /*
-             * Failed email verification 
-             * @IMPORTANT: Change
-             */
-            'email_verification_failure' => 'http://clientserver.com/email-not-verified',
-        ]
+        ],
+        /*
+         * The url where the rest server is hosted 
+         * @IMPORTANT: Change
+         */
+        'server' => 'https://ezra-obiwale.github.com/RESTServer/',
     ],
 ];

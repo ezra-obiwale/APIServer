@@ -98,7 +98,11 @@ class Auth extends Mongo {
         $users = User::get(['email_token' => $token], false);
         if (count($users)) {
             $user = (array) $users[0];
-            unset($user['email_token']);
+            if ($user['verified']) {
+                header('Location: ' . config('app.urls.client.email_verification_retried'));
+                exit;
+            }
+            $user['verified'] = time();
             if (User::update(User::getId($user), $user, ['replace' => true])) {
                 header('Location: ' . config('app.urls.client.email_verification_success'));
                 exit;
