@@ -1,5 +1,7 @@
 <?php
 
+use Data\Json;
+
 /**
  * Fetches a value from a config file
  * @param string $path The name of the file and the path to the desired value,
@@ -12,7 +14,7 @@ function config($path) {
     $data = include ROOT . 'config' . DIRECTORY_SEPARATOR . $filename . '.php';
     if (count($path)) {
         foreach ($path as $arg) {
-            if (!array_key_exists($arg, $data)) break;
+            if (!array_key_exists($arg, $data)) return null;
             $data = $data[$arg];
         }
     }
@@ -132,7 +134,8 @@ function uploadFiles(array $data, array $options = array()) {
 
             $tmpName = $info['tmp_name'][$key];
             $pInfo = pathinfo($name);
-            if (isset($options['extensions']) && !in_array(strtolower($pInfo['extension']), $options['extensions'])) {
+            if (isset($options['extensions']) && !in_array(strtolower($pInfo['extension']),
+                                                                      $options['extensions'])) {
                 $return['errors'][$ppt][$name] = UPLOAD_ERROR_EXTENSION;
                 continue;
             }
@@ -154,7 +157,9 @@ function uploadFiles(array $data, array $options = array()) {
             }
             $savePath = $dir . $filename;
             if (move_uploaded_file($tmpName, $savePath)) {
-                $return['success'][$ppt][$key] = str_replace([ROOT, '\\'], [HOST, '/'], $savePath);
+                $return['success'][$ppt][$key] = str_replace([ROOT, '\\'],
+                                                             [HOST, '/'],
+                                                             $savePath);
             }
             else {
                 $return['errors'][$ppt][$key] = UPLOAD_ERROR_FAILED;
@@ -162,4 +167,71 @@ function uploadFiles(array $data, array $options = array()) {
         }
     }
     return $return;
+}
+
+/**
+ * @param string $template Name of text/html template file to send
+ * @param array $variables Array of variables to fill into the template file
+ * @param string $plain Name of text/plain template file to send with the html
+ * @return Email
+ */
+function email($template, array $variables = [], $plain = null) {
+    $variables['APP_NAME'] = config('app.name');
+    return new Email($template, $variables, $plain);
+}
+
+/**
+ * 
+ * @param string $filepath Path to template file with dot (.) used as directory
+ * separator
+ * @param array $variables
+ * @param boolean $nl2br
+ * @return string
+ */
+function template($filepath, array $variables = [], $nl2br = true) {
+    if (!$content = file_get_contents(TEMPLATES . str_replace('.',
+                                                              DIRECTORY_SEPARATOR,
+                                                              $filepath) . '.html'))
+            return null;
+    if ($nl2br) $content = nl2br($content);
+    if (count($variables)) {
+        $vars = $vals = [];
+        foreach ($variables as $key => $value) {
+            $vars[] = '/{' . $key . '}/';
+            $vals[] = $value;
+        }
+        return preg_replace($vars, $vals, $content);
+    }
+    return $content;
+}
+
+/**
+ * Creates a token
+ * @return string
+ */
+function createToken() {
+    return md5(Json::createGUID());
+}
+
+/**
+ * Converts a relative server url to absolute
+ * @param string $relative_path
+ * @return string
+ */
+function url($relative_path) {
+    $url = config('app.urls.server');
+    if (substr($url, strlen($url) - 1) !== '/') $url .= '/';
+    if (substr($relative_path, 0, 1) == '/')
+            $relative_path = substr($relative_path, 1);
+    return $url . $relative_path;
+}
+
+/**
+ * Converts a url to clickable link
+ * @param string $url
+ * @param string $label
+ * @return string
+ */
+function aLink($url, $label = null) {
+    return '<a href="' . $url . '">' . ($label ?: $url) . '</a>';
 }

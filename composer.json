@@ -1,6 +1,6 @@
 {
-    "name": "ds-projects/sportyseat-server",
-    "description": "The REST server for SportySeat",
+    "name": "dscribe/rest-server",
+    "description": "The REST server for quick projects",
     "authors": [
         {
             "name": "Ezra Obiwale",
@@ -9,7 +9,7 @@
     ],
     "require": {
         "mongodb/mongodb": "^1.1",
-        "league/oauth2-server": "^5.1",
-        "bshaffer/oauth2-server-php": "~1.8"
+        "lcobucci/jwt": "^3.2",
+        "phpmailer/phpmailer": "^5.2"
     }
 }

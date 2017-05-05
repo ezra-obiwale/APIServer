@@ -28,8 +28,8 @@ class Validator {
                 // get rule to parameter pairs
                 $parts = explode(':', $_rule);
                 // check if target method exist. go to next rule if not.
-                if (!$parts[0] || !method_exists($this, $parts[0] . 'Rule') || (!$this->hasValue($field) && $parts[0] !== 'required'))
-                    continue;
+                if (!$parts[0] || !method_exists($this, $parts[0] . 'Rule'))
+                        continue;
                 // mark method as current action
                 $this->current = $parts[0];
                 // get parameter parts
@@ -38,7 +38,7 @@ class Validator {
                 array_unshift($params, $field);
                 // call method and throw exception if returns error message
                 if ($message = call_user_func_array([$this, $parts[0] . 'Rule'], $params))
-                    throw new Exception($message);
+                        throw new Exception($message);
             }
         }
     }
@@ -52,12 +52,9 @@ class Validator {
         if (strstr($field, '.')) {
             $value = null;
             foreach (explode('.', $field) as $name) {
-                if (!$value)
-                    $value = $this->data[$name];
-                else
-                    $value = $value[$name];
-                if (!$value || $value == 0)
-                    break;
+                if (!$value) $value = $this->data[$name];
+                else $value = $value[$name];
+                if (!$value || $value == 0) break;
             }
             return $value;
         }
@@ -67,10 +64,10 @@ class Validator {
     private function getMessage($field, $default, array $params = []) {
         if (is_array($this->messages[$field])) {
             if (array_key_exists($this->current, $this->messages[$field]))
-                return $this->messages[$field][$this->current];
+                    return $this->messages[$field][$this->current];
         }
         else if (is_string($this->messages[$field]))
-            return $this->messages[$field];
+                return $this->messages[$field];
         foreach ($params as $key => $value) {
             $default = str_replace("${$key}", $this->cleanName($value), $default);
         }
@@ -81,10 +78,64 @@ class Validator {
         return str_replace('_', ' ', str_replace('.', ' ', camelTo_($name)));
     }
 
-    private function requiredRule($field) {
-        $message = $this->getMessage($field, ' is required');
-        $value = $this->getValue($field);
-        return $value || $value != 0 ? null : $message;
+    private function betweenRule($field, $val1, $val2) {
+        $val = $this->getValue($field);
+        return ($val > $val2 || $val < $val1) ?
+                $this->getMessage($field, ' must be less than, or equal to, $1', [$target])
+                    : null;
+    }
+
+    private function dateRule($field) {
+        return !strtotime($this->getValue($field)) ?
+                $this->getMessage($field, ' must be a date') : null;
+    }
+
+    private function email($field) {
+        return $this->regexRule($field, '/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i', 'Invalid email.');
+    }
+
+    private function greaterthanorequaltoRule($field, $target) {
+        return $this->getValue($field) < $this->getValue($target) ?
+                $this->getMessage($field, ' must be greater than, or equal to, $1', [$target])
+                    : null;
+    }
+
+    private function greaterthanRule($field, $target) {
+        return $this->getValue($field) <= $this->getValue($target) ?
+                $this->getMessage($field, ' must be greater than $1', [$target])
+                    : null;
+    }
+
+    private function lessthanorequaltoRule($field, $target) {
+        return $this->getValue($field) > $this->getValue($target) ?
+                $this->getMessage($field, ' must be less than, or equal to, $1', [$target])
+                    : null;
+    }
+
+    private function lessthanRule($field, $target) {
+        return $this->getValue($field) >= $this->getValue($target) ?
+                $this->getMessage($field, ' must be less than $1', [$target]) : null;
+    }
+
+    private function matchRule($field, $target) {
+        return $this->getValue($field) !== $this->getValue($target) ?
+                $this->getMessage($field, ' must match $1', [$target]) : null;
+    }
+
+    private function maxRule($field, $target) {
+        return strlen($this->getValue($field)) > $target ?
+                $this->getMessage($field, " must not be more than $target chars")
+                    : null;
+    }
+
+    private function minRule($field, $target) {
+        return strlen($this->getValue($field)) < $target ?
+                $this->getMessage($field, " must be at least $target chars") : null;
+    }
+
+    private function notmatchRule($field, $target) {
+        return $this->getValue($field) === $this->getValue($target) ?
+                $this->getMessage($field, ' must not match $1', [$target]) : null;
     }
 
     private function numericRule($field) {
@@ -95,49 +146,15 @@ class Validator {
 
     private function regexRule($field, $pattern, $message = null) {
         return !preg_match($pattern, $this->data[$field]) ?
-                $this->getMessage($field, $message ?: ' does not match expectation') :
+                $this->getMessage($field, $message ?: ' does not match expectation')
+                    :
                 null;
     }
 
-    private function matchRule($field, $target) {
-        return $this->getValue($field) !== $this->getValue($target) ?
-                $this->getMessage($field, ' must match $1', [$target]) : null;
-    }
-
-    private function notmatchRule($field, $target) {
-        return $this->getValue($field) === $this->getValue($target) ?
-                $this->getMessage($field, ' must not match $1', [$target]) : null;
-    }
-
-    private function greaterthanRule($field, $target) {
-        return $this->getValue($field) <= $this->getValue($target) ?
-                $this->getMessage($field, ' must be greater than $1', [$target]) : null;
-    }
-
-    private function lessthanRule($field, $target) {
-        return $this->getValue($field) >= $this->getValue($target) ?
-                $this->getMessage($field, ' must be less than $1', [$target]) : null;
-    }
-
-    private function greaterthanorequaltoRule($field, $target) {
-        return $this->getValue($field) < $this->getValue($target) ?
-                $this->getMessage($field, ' must be greater than, or equal to, $1', [$target]) : null;
-    }
-
-    private function lessthanorequaltoRule($field, $target) {
-        return $this->getValue($field) > $this->getValue($target) ?
-                $this->getMessage($field, ' must be less than, or equal to, $1', [$target]) : null;
-    }
-
-    private function betweenRule($field, $val1, $val2) {
-        $val = $this->getValue($field);
-        return ($val > $val2 || $val < $val1) ?
-                $this->getMessage($field, ' must be less than, or equal to, $1', [$target]) : null;
-    }
-
-    private function dateRule($field) {
-        return !strtotime($this->getValue($field)) ?
-                $this->getMessage($field, ' must be a date') : null;
+    private function requiredRule($field) {
+        $message = $this->getMessage($field, ' is required');
+        $value = $this->getValue($field);
+        return $value || $value != 0 ? null : $message;
     }
 
 }
