@@ -152,6 +152,8 @@ return [
             'GET' => 'read'
         ]
     ],
+    /* @IMPORTANT: The amount of time before a session token expires */
+    'session_timeout' => 30,
     'urls' => [
         /*
          * The url where the rest server is hosted 

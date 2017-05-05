@@ -6,15 +6,16 @@ use Data\Json;
  * Fetches a value from a config file
  * @param string $path The name of the file and the path to the desired value,
  * all separated by dots (.)
+ * @param mixed $default The default value if the path does not resolve
  * @return mixed
  */
-function config($path) {
+function config($path, $default = null) {
     $path = explode('.', $path);
     $filename = array_shift($path);
     $data = include ROOT . 'config' . DIRECTORY_SEPARATOR . $filename . '.php';
     if (count($path)) {
         foreach ($path as $arg) {
-            if (!array_key_exists($arg, $data)) return null;
+            if (!array_key_exists($arg, $data)) return $default;
             $data = $data[$arg];
         }
     }

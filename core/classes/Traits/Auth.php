@@ -65,7 +65,7 @@ trait Auth {
      * @return integer
      */
     private static function getExpirationTime() {
-        return time() + 60 * 30; // 30 minutes
+        return time() + 60 * config('app.session_timeout', 30); // 30 minutes
     }
 
     /**
